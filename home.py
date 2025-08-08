@@ -45,12 +45,11 @@ def load_pdf_data():
     vectorstore = FAISS.from_documents([document], embeddings)
     return vectorstore.as_retriever()
 
-# Carregar os dados do PDF
 retriever = load_pdf_data()
 
 st.title("CEFET-MG - Assistente Virtual")
 
-# Template do prompt
+
 rag_template = """
 Você é um atendente virtual amigável e prestativo de uma faculdade chamada CEFET-MG (Centro Federal de Educação Tecnológica de Minas Gerais) 
 no campus de Varginha. 
