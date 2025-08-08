@@ -4,17 +4,19 @@ from dotenv import load_dotenv, find_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
-import fitz
-import os
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+import fitz  # PyMuPDF
+import os
 
 # Carrega as variaveis de ambiente
 _ = load_dotenv(find_dotenv())
 
 # Carrega o modelo do Gemini
-model = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
 
-# Função para extrair texto do PDF
+# Função para extrair texto do PDF (sem alterações)
 def extrai_texto_para_pdf(pdf_path):
     text = ""
     doc = fitz.open(pdf_path)
@@ -23,18 +25,28 @@ def extrai_texto_para_pdf(pdf_path):
     return text
 
 @st.cache_resource
-def load_pdf_data():    
+def load_pdf_data():
     pdf_path = "perguntas2.pdf"
     if not os.path.exists(pdf_path):
-        st.error("Arquivo PDF não encontrado!")
+        st.error(f"Arquivo '{pdf_path}' não encontrado! Verifique se ele está na mesma pasta do seu script.")
         return None
     
     texto_extraido = extrai_texto_para_pdf(pdf_path)
-    document = Document(page_content=texto_extraido, metadata={"source": pdf_path})
+    
+    # 1. Dividir o texto em chunks
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        length_function=len
+    )
+    chunks = text_splitter.split_text(texto_extraido)
+    
+    # 2. Criar documentos a partir dos chunks
+    documents = [Document(page_content=chunk) for chunk in chunks]
 
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
-        st.error("A chave da API do Google não foi encontrada. Configure GOOGLE_API_KEY nos Secrets do Streamlit.")
+        st.error("A chave da API do Google não foi encontrada. Configure a variável de ambiente GOOGLE_API_KEY.")
         st.stop()
 
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -42,34 +54,42 @@ def load_pdf_data():
         google_api_key=google_api_key
     )
 
-    vectorstore = FAISS.from_documents([document], embeddings)
-    return vectorstore.as_retriever()
+    # 3. Criar o vectorstore a partir dos documentos (chunks)
+    vectorstore = FAISS.from_documents(documents, embeddings)
+    return vectorstore.as_retriever(search_kwargs={"k": 3}) # Retorna os 3 chunks mais relevantes
 
+# Carrega o retriever
 retriever = load_pdf_data()
 
-st.title("CEFET-MG - Assistente Virtual")
+# Função para formatar o conteúdo dos documentos recuperados
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
 
+# ---- Interface do Streamlit ----
+st.title("CEFET-MG Varginha - Assistente Virtual 🤖")
+st.write("Pergunte sobre o curso de Sistemas de Informação!")
 
 rag_template = """
-Você é um atendente virtual amigável e prestativo de uma faculdade chamada CEFET-MG (Centro Federal de Educação Tecnológica de Minas Gerais) 
-no campus de Varginha. 
-Seu trabalho é fornecer informações sobre o curso de Sistemas de Informação de maneira educada, empática e clara
-consultando as informações extraida do texto, sempre seja organizado e detalhado.
-Sempre seja gentil ao responder.
+Você é um atendente virtual amigável e prestativo da faculdade CEFET-MG (Centro Federal de Educação Tecnológica de Minas Gerais) no campus de Varginha.
+Seu trabalho é fornecer informações sobre o curso de Sistemas de Informação de maneira educada, empática e clara, consultando as informações extraídas do texto abaixo.
+Seja sempre organizado, detalhado e gentil ao responder. Se a resposta não estiver no contexto, diga educadamente que não possui essa informação.
 
-Contexto: {context}
+Contexto:
+{context}
 
-Pergunta do cliente: {question}
+Pergunta: {question}
 """
 prompt = ChatPromptTemplate.from_template(rag_template)
 
-# Definir a cadeia corretamente
+# Definir a cadeia RAG corretamente
 chain = (
-    {"context": retriever, "question": RunnablePassthrough()}
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
     | prompt
     | model
+    | StrOutputParser()
 )
 
+# Inicializa o histórico de chat
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -79,20 +99,17 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Caixa de entrada para o usuário
-if user_input := st.chat_input("Você:"):
+if user_input := st.chat_input("Qual sua dúvida sobre o curso?"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
-
-    # Invocar a cadeia passando diretamente a string 
-    response_stream = chain.stream(user_input)  
-    full_response = ""
     
-    response_container = st.chat_message("assistant")
-    response_text = response_container.empty()
-    
-    for partial_response in response_stream:
-        full_response += str(partial_response.content)
-        response_text.markdown(full_response + "")
+    # Resposta do assistente com streaming
+    with st.chat_message("assistant"):
+        # Invocar a cadeia com a entrada do usuário
+        response_stream = chain.stream(user_input)
+        
+        # O st.write_stream é a forma mais moderna e recomendada de exibir streams
+        full_response = st.write_stream(response_stream)
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
