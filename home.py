@@ -79,26 +79,25 @@ st.title("Infobot - Assistente Virtual 🤖")
 st.write("Pergunte sobre o curso de Sistemas de Informação!")
 
 rag_template = """
-Você é um atendente virtual amigável e prestativo da faculdade CEFET-MG (Centro Federal de Educação Tecnológica de Minas Gerais) no campus de Varginha.
-Seu trabalho é fornecer informações sobre o curso de Sistemas de Informação de maneira educada, empática e clara, consultando as informações extraídas do texto abaixo.
-Seja sempre organizado, detalhado e gentil ao responder. Se a resposta não estiver no contexto, diga educadamente que não possui essa informação.
+Você é um atendente virtual amigável e prestativo de uma faculdade chamada CEFET-MG (Centro Federal de Educação Tecnológica de Minas Gerais) 
+no campus de Varginha. 
+Seu trabalho é fornecer informações sobre o curso de Sistemas de Informação de maneira educada, empática e clara
+consultando as informações extraida do texto, sempre seja organizado e detalhado.
+Sempre seja gentil ao responder.
 
-Contexto:
-{context}
+Contexto: {context}
 
-Pergunta: {question}
+Pergunta do cliente: {question}
 """
 prompt = ChatPromptTemplate.from_template(rag_template)
 
-# Definir a cadeia RAG corretamente
+# Definir a cadeia corretamente
 chain = (
-    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    {"context": retriever, "question": RunnablePassthrough()}
     | prompt
     | model
-    | StrOutputParser()
 )
 
-# Inicializa o histórico de chat
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -108,14 +107,20 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Caixa de entrada para o usuário
-if user_input := st.chat_input("Qual sua dúvida sobre o curso?"):
+if user_input := st.chat_input("Você:"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
+
+    # Invocar a cadeia passando diretamente a string 
+    response_stream = chain.stream(user_input)  
+    full_response = ""
     
-    # Resposta do assistente com streaming
-    with st.chat_message("assistant"):
-        response_stream = chain.stream(user_input)
-        full_response = st.write_stream(response_stream)
+    response_container = st.chat_message("assistant")
+    response_text = response_container.empty()
+    
+    for partial_response in response_stream:
+        full_response += str(partial_response.content)
+        response_text.markdown(full_response + "")
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
