@@ -31,7 +31,17 @@ def load_pdf_data():
     
     texto_extraido = extrai_texto_para_pdf(pdf_path)
     document = Document(page_content=texto_extraido, metadata={"source": pdf_path})
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        st.error("A chave da API do Google não foi encontrada. Configure GOOGLE_API_KEY nos Secrets do Streamlit.")
+        st.stop()
+
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004",
+        google_api_key=google_api_key
+    )
+
     vectorstore = FAISS.from_documents([document], embeddings)
     return vectorstore.as_retriever()
 
