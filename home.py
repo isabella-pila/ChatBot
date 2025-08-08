@@ -1,5 +1,9 @@
+import nest_asyncio
+nest_asyncio.apply()
+
 import streamlit as st
 from langchain_core.prompts import ChatPromptTemplate
+# Adicione a importação do dotenv novamente
 from dotenv import load_dotenv, find_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -7,14 +11,19 @@ from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-import fitz  # PyMuPDF
+import fitz
 import os
 
-# Carrega as variaveis de ambiente
+# 1. Re-adicione esta linha para carregar o .env localmente
 _ = load_dotenv(find_dotenv())
 
-# Carrega o modelo do Gemini
-model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+st.set_page_config(page_title="CEFET - Chat sobre o Cefet", page_icon="🎓")
+
+model = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    temperature=0.7,
+    google_api_key=os.getenv("GOOGLE_API_KEY")
+)
 
 # Função para extrair texto do PDF (sem alterações)
 def extrai_texto_para_pdf(pdf_path):
@@ -33,7 +42,7 @@ def load_pdf_data():
     
     texto_extraido = extrai_texto_para_pdf(pdf_path)
     
-    # 1. Dividir o texto em chunks
+    # Dividir o texto em chunks
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
@@ -41,12 +50,12 @@ def load_pdf_data():
     )
     chunks = text_splitter.split_text(texto_extraido)
     
-    # 2. Criar documentos a partir dos chunks
+    # Criar documentos a partir dos chunks
     documents = [Document(page_content=chunk) for chunk in chunks]
 
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
-        st.error("A chave da API do Google não foi encontrada. Configure a variável de ambiente GOOGLE_API_KEY.")
+        st.error("A chave da API do Google não foi encontrada. Verifique os Secrets no Streamlit Cloud.")
         st.stop()
 
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -54,9 +63,9 @@ def load_pdf_data():
         google_api_key=google_api_key
     )
 
-    # 3. Criar o vectorstore a partir dos documentos (chunks)
+    # Criar o vectorstore a partir dos documentos (chunks)
     vectorstore = FAISS.from_documents(documents, embeddings)
-    return vectorstore.as_retriever(search_kwargs={"k": 3}) # Retorna os 3 chunks mais relevantes
+    return vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # Carrega o retriever
 retriever = load_pdf_data()
@@ -66,7 +75,7 @@ def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 # ---- Interface do Streamlit ----
-st.title("CEFET-MG Varginha - Assistente Virtual 🤖")
+st.title("Infobot - Assistente Virtual 🤖")
 st.write("Pergunte sobre o curso de Sistemas de Informação!")
 
 rag_template = """
@@ -106,10 +115,7 @@ if user_input := st.chat_input("Qual sua dúvida sobre o curso?"):
     
     # Resposta do assistente com streaming
     with st.chat_message("assistant"):
-        # Invocar a cadeia com a entrada do usuário
         response_stream = chain.stream(user_input)
-        
-        # O st.write_stream é a forma mais moderna e recomendada de exibir streams
         full_response = st.write_stream(response_stream)
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
