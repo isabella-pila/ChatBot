@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnablePassthrough
 _ = load_dotenv(find_dotenv())
 
 # Carrega o modelo do Gemini
-model = ChatGoogleGenerativeAI(model="gemini-1.5-pro")
+model = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
 
 # Função para extrair texto do PDF
 def extrai_texto_para_pdf(pdf_path):
@@ -24,8 +24,7 @@ def extrai_texto_para_pdf(pdf_path):
 
 @st.cache_resource
 def load_pdf_data():    
-    pdf_path = "perguntas.pdf"
-    
+    pdf_path = "perguntas2.pdf"
     if not os.path.exists(pdf_path):
         st.error("Arquivo PDF não encontrado!")
         return None
