@@ -7,6 +7,9 @@ from langchain_core.documents import Document
 import fitz
 import os
 from langchain_core.runnables import RunnablePassthrough
+import nest_asyncio
+nest_asyncio.apply()
+
 
 # Carrega as variaveis de ambiente
 _ = load_dotenv(find_dotenv())
@@ -39,7 +42,9 @@ def load_pdf_data():
 # Carregar os dados do PDF
 retriever = load_pdf_data()
 
-st.title("CEFET-MG - Assistente Virtual")
+st.set_page_config(page_title="CEFET - Chat sobre o Cefet", page_icon="🎓")
+
+st.title("Infobot - Assistente Virtual")
 
 # Template do prompt
 rag_template = """
