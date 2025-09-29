@@ -10,14 +10,12 @@ from langchain_core.runnables import RunnablePassthrough
 import nest_asyncio
 nest_asyncio.apply()
 
+st.set_page_config(page_title="CEFET - Chat sobre o Cefet", page_icon="🎓")
 
-# Carrega as variaveis de ambiente
 _ = load_dotenv(find_dotenv())
 
-# Carrega o modelo do Gemini
-model = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
-# Função para extrair texto do PDF
 def extrai_texto_para_pdf(pdf_path):
     text = ""
     doc = fitz.open(pdf_path)
@@ -42,7 +40,6 @@ def load_pdf_data():
 # Carregar os dados do PDF
 retriever = load_pdf_data()
 
-st.set_page_config(page_title="CEFET - Chat sobre o Cefet", page_icon="🎓")
 
 st.title("Infobot - Assistente Virtual")
 
@@ -60,7 +57,7 @@ Pergunta do cliente: {question}
 """
 prompt = ChatPromptTemplate.from_template(rag_template)
 
-# Definir a cadeia corretamente
+# Definir a cadeia de recuperação e geração
 chain = (
     {"context": retriever, "question": RunnablePassthrough()}
     | prompt
